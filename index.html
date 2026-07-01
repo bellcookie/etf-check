@@ -62,17 +62,9 @@
     position:relative;
   }
 
-  .card .left{ flex:0 0 auto; width:32%; padding-top:2px; }
+  .card .left{ flex:1 1 auto; min-width:0; padding-top:2px; }
   .card .name{ font-size:15px; font-weight:600; white-space:normal; line-height:1.3; word-break:break-word; }
   .card .code{ font-size:11.5px; color:var(--sub); font-family:var(--mono); margin-top:4px; }
-
-  .spark-wrap{
-    flex:1 1 auto; height:46px; align-self:center; border-radius:8px; overflow:hidden;
-    background:#fff; display:flex; align-items:center; justify-content:center;
-  }
-  .spark-wrap img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .spark-wrap.fallback{ background:transparent; }
-  .spark-wrap svg{ width:100%; height:100%; display:block; }
 
   .card .right{ flex:0 0 auto; align-self:center; text-align:right; }
 
@@ -275,19 +267,6 @@
     });
   }
 
-  // 天天基金/东方财富官方生成的"当日实时净值估算图"，每次渲染都用新的时间戳避免拿到缓存旧图
-  function chartImgUrl(code){
-    return "https://j4.dfcfw.com/charts/pic6/" + code + ".png?t=" + Date.now();
-  }
-
-  window.handleSparkError = function(imgEl){
-    var wrap = imgEl.parentElement;
-    if(!wrap) return;
-    wrap.classList.add("fallback");
-    wrap.innerHTML = '<svg viewBox="0 0 120 40" preserveAspectRatio="none">' +
-      '<line x1="0" y1="20" x2="120" y2="20" stroke="#2a2f3a" stroke-dasharray="3 3" stroke-width="1"/></svg>';
-  };
-
   function renderList(){
     marketStatusText();
     if(order.length === 0){
@@ -328,9 +307,6 @@
         '<div class="left">' +
           '<div class="name">'+escapeHtml(f.name || code)+'</div>' +
           '<div class="code">'+code+(f.status==="loading"?' · <span class="skeleton-text">加载中</span>':'')+'</div>' +
-        '</div>' +
-        '<div class="spark-wrap" id="spark-'+code+'">' +
-          '<img src="'+chartImgUrl(code)+'" alt="当日实时估值走势" onerror="handleSparkError(this)">' +
         '</div>' +
         '<div class="right">'+right+navLine+'</div>';
 
