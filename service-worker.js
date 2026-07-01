@@ -31,8 +31,8 @@ self.addEventListener("activate", function(event){
 
 self.addEventListener("fetch", function(event){
   const url = event.request.url;
-  // 天天基金的数据请求永远走网络，不缓存，保证实时性
-  if(url.indexOf("fundgz.1234567.com.cn") !== -1){
+  // 天天基金估值 + 东方财富历史净值都永远走网络，不缓存，保证实时性/准确性
+  if(url.indexOf("fundgz.1234567.com.cn") !== -1 || url.indexOf("fund.eastmoney.com") !== -1){
     return;
   }
   event.respondWith(
