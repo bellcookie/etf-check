@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>基金估值</title>
+
+<!-- PWA / iOS 主屏幕图标配置 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="基金估值">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+<style>
+  :root{
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --line: #2a2f3a;
+    --text: #e8e9ed;
+    --sub: #8a8f9c;
+    --up: #ef4444;      /* 中国习惯：涨为红 */
+    --down: #22c55e;    /* 跌为绿 */
+    --flat: #8a8f9c;
+    --accent: #d4a24c;
+    --mono: 'SF Mono', 'Menlo', ui-monospace, monospace;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{
+    margin:0; padding:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+    min-height:100vh;
+    overscroll-behavior-y: none;
+  }
+  body{ padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
+
+  header{
+    position:sticky; top:0; z-index:10;
+    padding: calc(16px + env(safe-area-inset-top)) 16px 12px;
+    background: linear-gradient(180deg, var(--bg) 80%, transparent);
+    display:flex; align-items:baseline; justify-content:space-between;
+  }
+  header h1{ font-size:20px; margin:0; font-weight:700; letter-spacing:0.3px; }
+  header .status{ font-size:12px; color:var(--sub); font-family:var(--mono); }
+  header .status.live::before{
+    content:"●"; color:var(--accent); margin-right:4px;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+
+  .market-note{
+    margin: 0 16px 12px; font-size:12px; color:var(--sub);
+    padding:8px 12px; background:var(--panel); border-radius:10px;
+    border:1px solid var(--line);
+  }
+
+  #list{ padding: 0 16px; display:flex; flex-direction:column; gap:10px; }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px 16px;
+    position:relative;
+    overflow:hidden;
+  }
+  .card::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+  }
+  .card.up::before{ background:var(--up); }
+  .card.down::before{ background:var(--down); }
+  .card.flat::before{ background:var(--flat); }
+  .card.loading::before{ background:var(--line); }
+
+  .row1{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .name{ font-size:15px; font-weight:600; line-height:1.35; }
+  .code{ font-size:11px; color:var(--sub); font-family:var(--mono); margin-top:2px; }
+  .remove-btn{
+    background:none; border:none; color:var(--sub); font-size:18px;
+    padding:2px 6px; line-height:1; cursor:pointer; flex-shrink:0;
+  }
+  .remove-btn:active{ color:var(--up); }
+
+  .row2{ display:flex; align-items:baseline; gap:10px; margin-top:10px; }
+  .gsz{ font-size:26px; font-weight:700; font-family:var(--mono); font-variant-numeric: tabular-nums; }
+  .up .gsz{ color:var(--up); } .down .gsz{ color:var(--down); } .flat .gsz{ color:var(--flat); }
+  .pct{
+    font-size:15px; font-weight:600; font-family:var(--mono);
+    padding:2px 8px; border-radius:6px;
+  }
+  .up .pct{ color:var(--up); background:rgba(239,68,68,0.12); }
+  .down .pct{ color:var(--down); background:rgba(34,197,94,0.12); }
+  .flat .pct{ color:var(--flat); background:rgba(138,143,156,0.12); }
+
+  .row3{
+    display:flex; justify-content:space-between; margin-top:10px;
+    font-size:11.5px; color:var(--sub); font-family:var(--mono);
+  }
+  .row3 span b{ color:var(--text); font-weight:500; }
+
+  .skeleton{ color:var(--sub); font-size:13px; padding:6px 0; }
+
+  #empty{
+    text-align:center; color:var(--sub); padding:60px 20px; font-size:14px; line-height:1.8;
+  }
+  #empty .big{ font-size:34px; margin-bottom:10px; }
+
+  .addbar{
+    position:fixed; left:0; right:0; bottom:0;
+    padding: 10px 16px calc(14px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, transparent, var(--bg) 25%);
+    display:flex; gap:8px;
+  }
+  .addbar input{
+    flex:1; background:var(--panel-2); border:1px solid var(--line);
+    color:var(--text); border-radius:12px; padding:12px 14px;
+    font-size:15px; outline:none; font-family:var(--mono);
+  }
+  .addbar input:focus{ border-color:var(--accent); }
+  .addbar button{
+    background:var(--accent); color:#1a1408; border:none;
+    border-radius:12px; padding:0 20px; font-size:15px; font-weight:700;
+    cursor:pointer;
+  }
+  .addbar button:active{ opacity:0.8; }
+
+  .toast{
+    position:fixed; top:calc(60px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    padding:8px 16px; border-radius:10px; font-size:13px; z-index:50;
+    opacity:0; transition: opacity .25s ease; pointer-events:none;
+  }
+  .toast.show{ opacity:1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>基金估值</h1>
+  <div class="status" id="status">--</div>
+</header>
+
+<div class="market-note" id="marketNote"></div>
+
+<div id="list"></div>
+<div id="empty" style="display:none;">
+  <div class="big">📈</div>
+  下方输入 6 位基金代码，添加你要追踪的基金<br>
+  例如 <b>161725</b>（招商中证白酒A）
+</div>
+
+<div class="addbar">
+  <input id="codeInput" type="tel" inputmode="numeric" pattern="[0-9]*"
+         placeholder="输入6位基金代码" maxlength="6">
+  <button id="addBtn">添加</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "fund-tracker-codes";
+  var funds = {};
+  var order = [];
+  var jsonpCounter = 0;
+
+  var listEl = document.getElementById("list");
+  var emptyEl = document.getElementById("empty");
+  var statusEl = document.getElementById("status");
+  var noteEl = document.getElementById("marketNote");
+  var input = document.getElementById("codeInput");
+  var addBtn = document.getElementById("addBtn");
+  var toastEl = document.getElementById("toast");
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    setTimeout(function(){ toastEl.classList.remove("show"); }, 1800);
+  }
+
+  function marketStatusText(){
+    var now = new Date();
+    var day = now.getDay();
+    var h = now.getHours(), m = now.getMinutes();
+    var mins = h*60+m;
+    var isWeekday = day >=1 && day <=5;
+    var amOpen = 9*60+30, amClose = 11*60+30, pmOpen=13*60, pmClose=15*60;
+    var inSession = isWeekday && ((mins>=amOpen && mins<=amClose) || (mins>=pmOpen && mins<=pmClose));
+    if(inSession){
+      statusEl.textContent = "交易中 · 每30秒刷新";
+      statusEl.classList.add("live");
+      noteEl.textContent = "当前处于交易时段，估值实时波动，仅供参考，以基金公司公布净值为准。";
+    } else {
+      statusEl.textContent = "休市";
+      statusEl.classList.remove("live");
+      noteEl.textContent = isWeekday
+        ? "当前非交易时段（9:30-11:30, 13:00-15:00），显示的是最近一次估值。"
+        : "周末休市，显示的是上一交易日收盘估值。";
+    }
+    return inSession;
+  }
+
+  // JSONP：普通网站不受浏览器同源策略限制 script 标签加载，天天基金接口固定用 jsonpgz 作为回调名
+  window.jsonpgz = function(data){
+    if(!data || !data.fundcode) return;
+    var code = data.fundcode;
+    if(!funds[code]) return;
+    funds[code].name = data.name || funds[code].name;
+    funds[code].gsz = data.gsz;
+    funds[code].gszzl = data.gszzl;
+    funds[code].dwjz = data.dwjz;
+    funds[code].gztime = data.gztime;
+    funds[code].status = "ok";
+    render();
+  };
+
+  function fetchOne(code){
+    var s = document.createElement("script");
+    s.src = "https://fundgz.1234567.com.cn/js/" + code + ".js?rt=" + Date.now();
+    s.onerror = function(){
+      if(funds[code] && funds[code].status !== "ok"){
+        funds[code].status = "error";
+        render();
+      }
+      s.remove();
+    };
+    s.onload = function(){ s.remove(); };
+    document.body.appendChild(s);
+  }
+
+  function refreshAll(){
+    order.forEach(function(code){ fetchOne(code); });
+  }
+
+  function pctClass(gszzl){
+    var v = parseFloat(gszzl);
+    if(isNaN(v)) return "flat";
+    if(v > 0.0001) return "up";
+    if(v < -0.0001) return "down";
+    return "flat";
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function render(){
+    marketStatusText();
+    if(order.length === 0){
+      listEl.style.display = "none";
+      emptyEl.style.display = "block";
+      return;
+    }
+    listEl.style.display = "flex";
+    emptyEl.style.display = "none";
+    listEl.innerHTML = "";
+    order.forEach(function(code){
+      var f = funds[code];
+      var card = document.createElement("div");
+      if(f.status === "ok"){
+        card.className = "card " + pctClass(f.gszzl);
+        var sign = parseFloat(f.gszzl) > 0 ? "+" : "";
+        card.innerHTML =
+          '<div class="row1">' +
+            '<div><div class="name">' + escapeHtml(f.name || code) + '</div>' +
+            '<div class="code">' + code + '</div></div>' +
+            '<button class="remove-btn" data-code="'+code+'">✕</button>' +
+          '</div>' +
+          '<div class="row2">' +
+            '<div class="gsz">' + Number(f.gsz).toFixed(4) + '</div>' +
+            '<div class="pct">' + sign + f.gszzl + '%</div>' +
+          '</div>' +
+          '<div class="row3">' +
+            '<span>昨日净值 <b>' + (f.dwjz || "--") + '</b></span>' +
+            '<span>' + (f.gztime || "") + '</span>' +
+          '</div>';
+      } else if(f.status === "error"){
+        card.className = "card loading";
+        card.innerHTML =
+          '<div class="row1">' +
+            '<div><div class="name">' + code + '</div>' +
+            '<div class="code">获取失败，稍后自动重试</div></div>' +
+            '<button class="remove-btn" data-code="'+code+'">✕</button>' +
+          '</div>';
+      } else {
+        card.className = "card loading";
+        card.innerHTML =
+          '<div class="row1">' +
+            '<div><div class="name">' + code + '</div>' +
+            '<div class="skeleton">加载中...</div></div>' +
+            '<button class="remove-btn" data-code="'+code+'">✕</button>' +
+          '</div>';
+      }
+      listEl.appendChild(card);
+    });
+  }
+
+  listEl.addEventListener("click", function(e){
+    var btn = e.target.closest(".remove-btn");
+    if(!btn) return;
+    removeFund(btn.getAttribute("data-code"));
+  });
+
+  function addFund(code){
+    code = (code || "").trim();
+    if(!/^\d{6}$/.test(code)){
+      showToast("请输入6位数字基金代码");
+      return;
+    }
+    if(funds[code]){
+      showToast("已在列表中");
+      return;
+    }
+    funds[code] = { code: code, status: "loading" };
+    order.push(code);
+    saveCodes();
+    render();
+    fetchOne(code);
+    input.value = "";
+  }
+
+  function removeFund(code){
+    delete funds[code];
+    order = order.filter(function(c){ return c !== code; });
+    saveCodes();
+    render();
+  }
+
+  function saveCodes(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(order)); }catch(e){}
+  }
+
+  function loadCodes(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        var codes = JSON.parse(raw);
+        if(Array.isArray(codes)){
+          codes.forEach(function(code){
+            if(/^\d{6}$/.test(code) && !funds[code]){
+              funds[code] = { code: code, status: "loading" };
+              order.push(code);
+            }
+          });
+        }
+      }
+    }catch(e){}
+  }
+
+  addBtn.addEventListener("click", function(){ addFund(input.value); });
+  input.addEventListener("keydown", function(e){
+    if(e.key === "Enter") addFund(input.value);
+  });
+  input.addEventListener("input", function(){
+    input.value = input.value.replace(/\D/g,"").slice(0,6);
+  });
+
+  loadCodes();
+  if(order.length === 0){
+    addFund("161725"); // 首次使用的示例，可删除
+  } else {
+    render();
+    refreshAll();
+  }
+
+  setInterval(function(){
+    marketStatusText();
+    refreshAll();
+  }, 30000);
+  setInterval(marketStatusText, 15000);
+
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("service-worker.js").catch(function(){});
+    });
+  }
+})();
+</script>
+</body>
+</html>
